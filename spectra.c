@@ -6,7 +6,7 @@
 #include <gsl_spline.h>
 #include "spectra_funcs.h"
 #include "EBL_funcs.h"
-#include "../share/math_funcs.h"
+#include "share/math_funcs.h"
 #include "cosmo_funcs.h"
 
 double p = 2.20; //2.23
@@ -97,9 +97,9 @@ int main(){
   /* Field z logM re_light re_mass SFR */
   /* Field is GOODS-S: 1, GOODS-N: 2, COSMOS: 3, UDS: 4 */
 
-//  FILE *gals_in = fopen( "input/cat_GOODS-S.txt" , "r" );
+  FILE *gals_in = fopen( "input/cat_GOODS-S.txt" , "r" );
 //  FILE *gals_in = fopen( "input/cat_test.txt" , "r" );
-  FILE *gals_in = fopen( "../gal_data/cat_test.txt" , "r" );
+//  FILE *gals_in = fopen( "../gal_data/cat_test.txt" , "r" );
   fscanf( gals_in , "%*[^\n]\n");
   unsigned long int n_gal;
   fscanf( gals_in , "%lu\n" , &n_gal);
@@ -182,16 +182,9 @@ int main(){
   double **D_cm2sm1 = malloc(sizeof *D_cm2sm1 * n_gal);
   if (D_cm2sm1){for (i = 0; i < n_gal; i++){D_cm2sm1[i] = malloc(sizeof *D_cm2sm1[i] * n_Esteps);}}
 
-  double **CR_spec = malloc(sizeof *CR_spec * n_gal);
-  if (CR_spec){for (i = 0; i < n_gal; i++){CR_spec[i] = malloc(sizeof *CR_spec[i] * n_Esteps);}}
-
-
-
   double G_h = 4.302e-3, eta_pp = 0.5;
   double u_LA, v_Ai, t_loss_s, E_SNCR_GeVsm1, C[n_gal] ;
-  double v_st, L_A, Gam_0, D0, B[n_gal];
-
-  double Dcasc, t_casc, r_L, Dflrw, r_G_cm, l_outer, LdampA;
+  double v_st, L_A, Gam_0, D0;
 
   double CnormE = C_norm_E();
 
@@ -206,13 +199,6 @@ int main(){
     v_Ai = 1000. * ( u_LA/10. )/( sqrt(chi/1e-4) * M_A );
     L_A = h_pc[i]/pow(M_A,3);
 
-    B[i] = sqrt(4.* M_PI * chi * n_cmm3[i] * mu_p * m_H_kg * 1e3) * v_Ai * 1e5; //sqrt(4.* M_PI * n_cmm3[i] * mu_p * m_H_kg * 1e3) * u_LA/M_A * 1e5;
-    l_outer = pow( 3. * E_SN_erg/( 2. * M_PI * pow(sig_gas_kmsm1[i] * 1e5, 2) * n_cmm3[i] * mu_p * m_H_kg * 1e3), 1./3.);
-
-printf( "\n" );
-//printf( "%e %e \n", B[i], sqrt(4.* M_PI * n_cmm3[i] * mu_p * m_H_kg * 1e3) * u_LA/M_A * 1e5 );
-printf( "%e %e \n", L_A, l_outer/pc_cm );
-
     D0 = v_Ai * L_A * 1e5 * pc_cm;
 
     t_loss_s = 1./(1./(1./( n_cmm3[i] * sigma_pp_cm2 * eta_pp * c_cmsm1 )) + 1./(pow(10 * h_pc[i] * pc_cm,2)/D0) );
@@ -221,27 +207,13 @@ printf( "%e %e \n", L_A, l_outer/pc_cm );
     C[i] = E_SNCR_GeVsm1 * t_loss_s/( CnormE * 2. * A_re_pc2[i] * 2. * h_pc[i] * pow(pc_cm, 3) );
 
 
-    LdampA = 0.0011 * pow( h_pc[i]/100., -1./2.) * pow( u_LA/10./ ( (chi/1e-4) * (n_H_cmm3[i]/1e3) ), 3./2.);
-
 
 
     for (j = 0; j < n_Esteps; j++){
 
-      r_G_cm = 330. * E_GeV[j] * pow( B[i]/1e4, -1 );
-
-
-      Dcasc = pow( r_G_cm, 1./3.) * pow( l_outer, 2./3.) * c_cmsm1/3.;
-
       v_st = fmin( v_Ai * (1. + 2.3e-3 * pow( sqrt(pow(E_GeV[j],2) + 2. * m_p_GeV * E_GeV[j]) , p-1.) * pow(n_H_cmm3[i]/1e3, 1.5) * (chi/1e-4) * M_A/( u_LA/10. * C[i]/2e-7 )), c_cmsm1/1e5);
       D_cm2sm1[i][j] = v_st * L_A * 1e5 * pc_cm;
 
-
-      if (r_G_cm/pc_cm/LdampA * 2.*M_PI > 1.){
-        D_cm2sm1[i][j] = Dcasc;
-        }
-
-//      printf( "%e %e %e \n", E_GeV[j], D_cm2sm1[i][j], Dcasc );
-//      printf( "%e %e \n", E_GeV[j], r_G_cm/pc_cm/LdampA );
 
       tau_eff[i][j] = 9.9 * Sig_gas_Msolpcm2[i]/1e3 * h_pc[i]/1e2 * 1e27/D_cm2sm1[i][j];
 
@@ -253,28 +225,9 @@ printf( "%e %e \n", L_A, l_outer/pc_cm );
     t_loss_s = 1./( n_cmm3[i] * sigma_pp_cm2 * eta_pp * c_cmsm1 );
     C[i] = E_SNCR_GeVsm1 * t_loss_s/( CnormE * 2. * A_re_pc2[i] * 2. * h_pc[i] * pow(pc_cm, 3) );
 
-    //Calculate the internal cosmic ray spectrum with loss times.
-    for (j = 0; j < n_Esteps; j++){
-      t_loss_s = 1./(1./(1./( n_cmm3[i] * sigma_pp_cm2 * eta_pp * c_cmsm1 )) + 1./(pow(10 * h_pc[i] * pc_cm,2)/D_cm2sm1[i][j]) );
-      CR_spec[i][j] = J( E_GeV[j], E_SNCR_GeVsm1 * t_loss_s/( CnormE * 2. * A_re_pc2[i] * 2. * h_pc[i] * pow(pc_cm, 3) ) );
-      }
-
     }
 
   printf("Done calculating galaxies.\n");
-
-  //print CR spectra
-  FILE *CR_specs_out = fopen( "output/CR_specs.txt", "w+" );
-  for (j = 0; j < n_Esteps; j++){
-    fprintf( CR_specs_out, "%e ", E_GeV[j] );
-    }
-  fprintf( CR_specs_out, "\n" );
-  for (i = 0; i < n_gal; i++){
-    for (j = 0; j < n_Esteps; j++){
-      fprintf( CR_specs_out, "%e ", CR_spec[i][j] * E_GeV[j] * c_cmsm1/(4.*M_PI) );
-      }
-    fprintf( CR_specs_out, "\n" );
-    }
 
 
 /*################################################################################################################################*/

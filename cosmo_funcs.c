@@ -2,8 +2,8 @@
 #define cosmo_funcs_h
 #include <math.h>
 #include <gsl_integration.h>
-#include "../share/cosmo_params.h"
-#include "../share/astro_const.h"
+#include "share/cosmo_params.h"
+#include "share/astro_const.h"
 
 double E_z( double z ){
   return sqrt(om_M * pow((1.+z),3) + om_k * pow((1.+z),2) + om_lam);

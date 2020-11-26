@@ -7,7 +7,7 @@
 #include <gsl_integration.h>
 #include <gsl_spline.h>
 #include <cubature.h>
-#include "../share/math_funcs.h"
+#include "share/math_funcs.h"
 
 //extern gsl_integration_workspace * w;
 //#pragma omp threadprivate(w)
