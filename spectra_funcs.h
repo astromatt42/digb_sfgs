@@ -7,7 +7,7 @@
 #include <gsl_integration.h>
 #include <gsl_spline.h>
 #include <cubature.h>
-#include "../share/math_funcs.h"
+#include "share/math_funcs.h"
 
 //extern gsl_integration_workspace * w;
 //#pragma omp threadprivate(w)
@@ -549,6 +549,18 @@ double q_pi( double E_pi_GeV, double n_H, double C, gsl_spline spline, gsl_inter
   double f_cal = gsl_spline_eval( &spline, T_p, &acc );
   return n_H * c_cmsm1 * beta_p * J( T_p, C )/K_pi * sigma_inel_mb( T_p ) * mb_cm2 * f_cal;
   }
+//double q_pi_fcal1( double E_pi_GeV, double n_H, double C, gsl_spline spline, gsl_interp_accel acc ){
+//  double T_p = E_pi_GeV/K_pi - m_p;
+//  double beta_p = sqrt( 1. - pow(m_p,2)/pow(T_p+m_p,2) );
+//  return n_H * c_cmsm1 * beta_p * J( T_p, C )/K_pi * sigma_inel_mb( T_p ) * mb_cm2;
+//  }
+
+double q_pi_norm( double E_pi_GeV ){
+  double T_p = E_pi_GeV/K_pi - m_p;
+  double beta_p = sqrt( 1. - pow(m_p,2)/pow(T_p+m_p,2) );
+  return c_cmsm1 * beta_p * J( T_p, 1. )/K_pi * sigma_inel_mb( T_p ) * mb_cm2;
+  }
+
 
 //Peretti 2019 and Kelner 2006
 double f_nu_mu2( double x ) //This is also f_e
@@ -714,6 +726,64 @@ double q_nu( double E_nu_GeV, double n_H, double C, gsl_spline spline, gsl_inter
   return res_numu2_nue + res_numu1;
   }
 
+
+double q_nu_norm_fcal1( double E_nu_GeV ){
+  double res_numu2_nue, res_numu1;
+  double abserr_numu2_nue, abserr_numu1;
+  double x_min, x_max;
+
+
+  int F_numu2_nue( unsigned ndim, size_t npts, const double *x, void *fdata, unsigned fdim, double *fval )
+    {
+    unsigned j;
+    struct hcub_data fdata_in = *((struct hcub_data *)fdata);
+    for (j = 0; j < npts; ++j)
+      {
+      fval[j] = 2. *  ( f_nu_e(x[j*ndim+0]) + f_nu_mu2(x[j*ndim+0]) ) * q_pi_norm( fdata_in.E_gam/x[j*ndim+0] )/x[j*ndim+0];
+      }
+    return 0;
+    }
+
+  double F_numu1(double x, void* p){
+    double lambda = 1. - pow(m_mu/m_piC,2);
+    return 2./lambda * q_pi_norm( E_nu_GeV/x )/x;
+    }
+
+  double xmin[1] = { E_nu_GeV/( (T_p_high + m_p) * K_pi) };
+  double xmax[1] = { fmin( E_nu_GeV/( (T_p_low + m_p) * K_pi), 1. ) };
+
+  struct hcub_data fdata;
+  fdata.E_gam = E_nu_GeV;
+
+  struct hcub_data *fdata_ptr = &fdata;
+
+  if (xmin[0] < xmax[0]){
+    hcubature_v( 1, F_numu2_nue, fdata_ptr, 1, xmin, xmax, 100000, 0., 1e-6, ERROR_INDIVIDUAL, &res_numu2_nue, &abserr_numu2_nue );
+    }
+  else {
+    res_numu2_nue = 0.;
+    abserr_numu2_nue = 0.;
+    }
+
+  gsl_function F;
+  gsl_integration_workspace * w;
+  w = gsl_integration_workspace_alloc(100000);
+
+  F.function = &F_numu1;
+  double lambda = 1. - pow(m_mu/m_piC,2);
+  x_min = E_nu_GeV/( (T_p_high + m_p) * K_pi);
+  x_max = fmin( E_nu_GeV/( (T_p_low + m_p) * K_pi), lambda );
+  if (x_min < x_max){
+    gsl_integration_qag( &F , x_min, x_max, 0., 1e-4, 100000, GSL_INTEG_GAUSS61, w, &res_numu1, &abserr_numu1 );
+    }
+  else {
+    res_numu1 = 0.;
+    abserr_numu1 = 0.;
+    }
+
+  gsl_integration_workspace_free(w);
+  return res_numu2_nue + res_numu1;
+  }
 
 
 /* ############################################################################################################################## */

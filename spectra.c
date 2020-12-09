@@ -6,7 +6,7 @@
 #include <gsl_spline.h>
 #include "spectra_funcs.h"
 #include "EBL_funcs.h"
-#include "../share/math_funcs.h"
+#include "share/math_funcs.h"
 #include "cosmo_funcs.h"
 
 double p = 2.20; //2.23
@@ -97,9 +97,8 @@ int main(){
   /* Field z logM re_light re_mass SFR */
   /* Field is GOODS-S: 1, GOODS-N: 2, COSMOS: 3, UDS: 4 */
 
-//  FILE *gals_in = fopen( "input/cat_GOODS-S.txt" , "r" );
+  FILE *gals_in = fopen( "input/cat_GOODS-S.txt" , "r" );
 //  FILE *gals_in = fopen( "input/cat_test.txt" , "r" );
-  FILE *gals_in = fopen( "../gal_data/cat_test.txt" , "r" );
   fscanf( gals_in , "%*[^\n]\n");
   unsigned long int n_gal;
   fscanf( gals_in , "%lu\n" , &n_gal);
@@ -150,7 +149,7 @@ int main(){
     sig_gas_kmsm1[i] = sigma_gas_Yu( SFR_Msolyrm1[i] );
     }
 
-  double chi = 1e-4, M_A = 2., beta = 0.25;
+  double chi = 1e-4, M_A = 2.0, beta = 0.25;
   double m_H_kg = 1.67e-27, sigma_pp_cm2 = 40e-27, mu_H = 1.4, mu_p = 1.17;
 
   /* Number of stars that go SN per solar mass of stars formed - C2003 IMF */
@@ -191,7 +190,7 @@ int main(){
   double u_LA, v_Ai, t_loss_s, E_SNCR_GeVsm1, C[n_gal] ;
   double v_st, L_A, Gam_0, D0, B[n_gal];
 
-  double Dcasc, t_casc, r_L, Dflrw, r_G_cm, l_outer, LdampA;
+  double DcascKgv, DcascKrn, t_casc, r_L, Dflrw, r_G_cm, l_outer, LdampA, Ldampf, eps_f;
 
   double CnormE = C_norm_E();
 
@@ -207,11 +206,11 @@ int main(){
     L_A = h_pc[i]/pow(M_A,3);
 
     B[i] = sqrt(4.* M_PI * chi * n_cmm3[i] * mu_p * m_H_kg * 1e3) * v_Ai * 1e5; //sqrt(4.* M_PI * n_cmm3[i] * mu_p * m_H_kg * 1e3) * u_LA/M_A * 1e5;
-    l_outer = pow( 3. * E_SN_erg/( 2. * M_PI * pow(sig_gas_kmsm1[i] * 1e5, 2) * n_cmm3[i] * mu_p * m_H_kg * 1e3), 1./3.);
+    l_outer = h_pc[i] * pc_cm; //pow( 3. * E_SN_erg/( 2. * M_PI * pow(sig_gas_kmsm1[i] * 1e5, 2) * n_cmm3[i] * mu_p * m_H_kg * 1e3), 1./3.);
 
-printf( "\n" );
+//printf( "\n" );
 //printf( "%e %e \n", B[i], sqrt(4.* M_PI * n_cmm3[i] * mu_p * m_H_kg * 1e3) * u_LA/M_A * 1e5 );
-printf( "%e %e \n", L_A, l_outer/pc_cm );
+//printf( "%e %e \n", h_pc[i], l_outer/pc_cm );
 
     D0 = v_Ai * L_A * 1e5 * pc_cm;
 
@@ -222,29 +221,49 @@ printf( "%e %e \n", L_A, l_outer/pc_cm );
 
 
     LdampA = 0.0011 * pow( h_pc[i]/100., -1./2.) * pow( u_LA/10./ ( (chi/1e-4) * (n_H_cmm3[i]/1e3) ), 3./2.);
-
+    Ldampf = 1.7 * pow( u_LA/10., 2./3.) * pow( sqrt(h_pc[i]/100.)/( (chi/1e-4) * (n_H_cmm3[i]/1e3) ), 1./3.) / pow(M_A, 2);
 
 
     for (j = 0; j < n_Esteps; j++){
 
-      r_G_cm = 330. * E_GeV[j] * pow( B[i]/1e4, -1 );
-
-
-      Dcasc = pow( r_G_cm, 1./3.) * pow( l_outer, 2./3.) * c_cmsm1/3.;
 
       v_st = fmin( v_Ai * (1. + 2.3e-3 * pow( sqrt(pow(E_GeV[j],2) + 2. * m_p_GeV * E_GeV[j]) , p-1.) * pow(n_H_cmm3[i]/1e3, 1.5) * (chi/1e-4) * M_A/( u_LA/10. * C[i]/2e-7 )), c_cmsm1/1e5);
       D_cm2sm1[i][j] = v_st * L_A * 1e5 * pc_cm;
 
+      r_G_cm = 330. * E_GeV[j] * pow( B[i]/1e4, -1 );
 
-      if (r_G_cm/pc_cm/LdampA * 2.*M_PI > 1.){
-        D_cm2sm1[i][j] = Dcasc;
+      //Kolmogorov ISO-K41
+      DcascKgv = c_cmsm1 * pow( M_A, -2 ) * l_outer * pow( r_G_cm/l_outer, 1./3.); //pow( r_G_cm, 1./3.) * pow( l_outer, 2./3.) * c_cmsm1/3.;
+
+      //Fraction of turbulent power in fast modes
+      eps_f = 0.5;
+      //Kraichnan - make sure to adjust damping scale to fast modes
+      DcascKrn = c_cmsm1 * pow( M_A, -2 ) * l_outer * pow( r_G_cm/l_outer, 1./2.); //pow( r_G_cm * l_outer, 1./2.) * c_cmsm1/(3. * eps_f);
+printf( "%e %e %e \n", D_cm2sm1[i][j], DcascKgv, DcascKrn );
+      if ( Ldampf > LdampA ){
+        if (r_G_cm/pc_cm/Ldampf * 2.*M_PI > 1.){
+          D_cm2sm1[i][j] = DcascKrn;
+          }
+        else if (r_G_cm/pc_cm/LdampA * 2.*M_PI > 1.){
+          D_cm2sm1[i][j] = DcascKgv;
+          }
         }
+      else {
+        if (r_G_cm/pc_cm/Ldampf * 2.*M_PI > 1.){
+          D_cm2sm1[i][j] = DcascKrn;
+          }
+        }
+
+//      if (r_G_cm/pc_cm/LdampA * 2.*M_PI > 1.){
+//      if (r_G_cm/pc_cm/Ldampf * 2.*M_PI > 1.){
+//        D_cm2sm1[i][j] = Dcasc;
+//        }
 
 //      printf( "%e %e %e \n", E_GeV[j], D_cm2sm1[i][j], Dcasc );
 //      printf( "%e %e \n", E_GeV[j], r_G_cm/pc_cm/LdampA );
 
       tau_eff[i][j] = 9.9 * Sig_gas_Msolpcm2[i]/1e3 * h_pc[i]/1e2 * 1e27/D_cm2sm1[i][j];
-
+printf( "%e %e \n", D_cm2sm1[i][j], tau_eff[i][j] );
       Gam_0 = 41.2 * h_pc[i]/1e2 * v_st/1e3 * 1e27/D_cm2sm1[i][j];
       fcal[i][j] = 1. - 1./( gsl_sf_hyperg_0F1( beta/(beta+1.) , tau_eff[i][j]/pow(beta+1.,2) ) + 
                    tau_eff[i][j]/Gam_0 * gsl_sf_hyperg_0F1( (beta+2.)/(beta+1.) , tau_eff[i][j]/pow(beta+1., 2)) );
