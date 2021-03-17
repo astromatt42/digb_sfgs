@@ -3,7 +3,7 @@ INCLFLAGS = -I$(HOME)/Software/gsl-2.6/interpolation -I$(HOME)/Software/gsl-2.6/
 
 LDFLAGS = -Wl,-rpath,$(HOME)/Software/gsl_lib/lib:$(HOME)/Software/cubature
 
-OPTFLAGS = -O3
+OPTFLAGS = -O3 -Wall -g
 
 CFLAGSTC = -I/home/mar/Software/gsl-2.6/integration
 
@@ -15,6 +15,9 @@ OMPFLAGS = -fopenmp
 
 spectra:
 	gcc $(INCLFLAGS) $(OMPFLAGS) $(LDFLAGS) $(OPTFLAGS) spectra.c spectra_funcs.h -lgsl -lgslcblas -lhcubature -lm -o spectra
+
+spectra_test:
+	gcc $(INCLFLAGS) $(OMPFLAGS) $(LDFLAGS) $(OPTFLAGS) spectra_test.c spectra_funcs_test.h -lgsl -lgslcblas -lhcubature -lm -o spectra
 
 spectra_gas:
 	gcc $(INCLFLAGS) $(OMPFLAGS) $(LDFLAGS) $(OPTFLAGS) spectra_gas.c spectra_funcs.h -lgsl -lgslcblas -lhcubature -lm -o spectra
